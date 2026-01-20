@@ -3,3 +3,4 @@ pymunk
 google-generativeai
 watchdog
 pygame_gui
+python-dotenv

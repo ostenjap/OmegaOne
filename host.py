@@ -14,6 +14,10 @@ from watchdog.events import FileSystemEventHandler
 # --- Configuration ---
 WINDOW_SIZE = (1024, 768)
 GAMES_DIR = "games"
+from dotenv import load_dotenv
+
+load_dotenv() # Load variables from .env
+
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 if GEMINI_API_KEY:
