@@ -125,11 +125,16 @@ class GameHost:
         )
         
         self.console_window = pygame_gui.elements.UITextBox(
-            html_text="Ready.",
-            relative_rect=pygame.Rect((10, 600), (1004, 150)),
+            html_text="Ready.<br>",
+            relative_rect=pygame.Rect((10, 600), (1004, 120)),
             manager=self.ui_manager
         )
         
+        self.command_entry = pygame_gui.elements.UITextEntryLine(
+            relative_rect=pygame.Rect((10, 725), (1004, 35)),
+            manager=self.ui_manager
+        )
+
         self.ai_btn = pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect((10, 320), (200, 50)),
             text='Ask AI to Balance',
@@ -175,7 +180,7 @@ class GameHost:
 
     def log(self, message):
         print(message)
-        self.console_window.set_text(message)
+        self.console_window.append_html_text(f"{message}<br>")
 
     def run_ai_fix(self):
         if not self.current_game_name:
@@ -227,6 +232,13 @@ class GameHost:
                 if event.type == pygame_gui.UI_BUTTON_PRESSED:
                     if event.ui_element == self.ai_btn:
                         self.run_ai_fix()
+
+                if event.type == pygame_gui.UI_TEXT_ENTRY_FINISHED:
+                    if event.ui_element == self.command_entry:
+                        user_text = event.text
+                        self.log(f"<b>You:</b> {user_text}")
+                        self.command_entry.set_text("")
+                        # Future: Pass this to AI or Game logic
 
                 self.ui_manager.process_events(event)
 
