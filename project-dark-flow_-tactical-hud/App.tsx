@@ -33,7 +33,7 @@ const App: React.FC = () => {
   const requestRef = useRef<number>(undefined);
   const stepCountRef = useRef(0);
   const lastTimeRef = useRef(performance.now());
-  
+
   // Persistent Chat instance
   const chatInstance = useMemo(() => getTacticalChat(), []);
 
@@ -53,7 +53,7 @@ const App: React.FC = () => {
       const now = performance.now();
       if (engineRef.current && !isPaused) {
         const multiStep = isFaster ? animationSpeed * 2 : animationSpeed;
-        for(let i = 0; i < multiStep; i++) {
+        for (let i = 0; i < multiStep; i++) {
           engineRef.current.step();
           stepCountRef.current++;
         }
@@ -89,13 +89,13 @@ const App: React.FC = () => {
       const idx = i * 4;
       const val = Math.abs(data[i]) * contrast;
       if (obstacles[i]) {
-        imageData.data[idx] = 200; imageData.data[idx+1] = 200; imageData.data[idx+2] = 200; imageData.data[idx+3] = 255;
+        imageData.data[idx] = 200; imageData.data[idx + 1] = 200; imageData.data[idx + 2] = 200; imageData.data[idx + 3] = 255;
       } else {
         if (plotMode === 'curl') {
           const v = data[i] * contrast;
-          imageData.data[idx] = 128 + v; imageData.data[idx+1] = 128 - Math.abs(v); imageData.data[idx+2] = 128 - v; imageData.data[idx+3] = 255;
+          imageData.data[idx] = 128 + v; imageData.data[idx + 1] = 128 - Math.abs(v); imageData.data[idx + 2] = 128 - v; imageData.data[idx + 3] = 255;
         } else {
-          imageData.data[idx] = val * 0.2; imageData.data[idx+1] = val * 0.6; imageData.data[idx+2] = val; imageData.data[idx+3] = 255;
+          imageData.data[idx] = val * 0.2; imageData.data[idx + 1] = val * 0.6; imageData.data[idx + 2] = val; imageData.data[idx + 3] = 255;
         }
       }
     }
@@ -108,13 +108,13 @@ const App: React.FC = () => {
     }
 
     if (showFlowlines) {
-       ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-       ctx.beginPath();
-       for(let y=10; y<ny; y+=20) {
-         ctx.moveTo(0, y);
-         ctx.lineTo(nx, y);
-       }
-       ctx.stroke();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.beginPath();
+      for (let y = 10; y < ny; y += 20) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(nx, y);
+      }
+      ctx.stroke();
     }
   };
 
@@ -140,20 +140,62 @@ const App: React.FC = () => {
       // Use the chat session for memory
       const response = await chatInstance.sendMessage({ message: userPrompt });
       const result = JSON.parse(response.text);
-      
+
       if (result) {
         addLog('AI', result.tactical_message);
-        const { type, data } = result.action;
+        const { type, data = {} } = result.action;
+
         if (type === 'generate_shape' && engineRef.current) {
-           engineRef.current.clearObstacles();
-           if (userPrompt.toLowerCase().includes('wing') || userPrompt.toLowerCase().includes('b2')) {
-              for(let i=0; i<60; i++) {
-                engineRef.current.addObstacle(100 + i, 100 + (i*0.4), 1.5);
-                engineRef.current.addObstacle(100 + i, 100 - (i*0.4), 1.5);
+          engineRef.current.clearObstacles();
+          const cx = data.x || 150;
+          const cy = data.y || 100;
+          const radius = data.radius || 10;
+          const shapeType = data.shape_type || 'ball';
+
+          if (shapeType === 'naca') {
+            // Generate NACA 0020 symmetrical airfoil
+            // Formula: yt = 5*t*(0.2969*sqrt(x) - 0.1260*x - 0.3516*x^2 + 0.2843*x^3 - 0.1015*x^4)
+            const chord = 80;
+            const t = 0.20; // 20% thickness
+            for (let i = 0; i <= chord; i += 0.5) {
+              const x = i / chord;
+              const yt = 5 * t * (0.2969 * Math.sqrt(x) - 0.1260 * x - 0.3516 * Math.pow(x, 2) + 0.2843 * Math.pow(x, 3) - 0.1015 * Math.pow(x, 4));
+              const yOffset = yt * chord;
+              engineRef.current.addObstacle(cx - (chord / 2) + i, cy - yOffset, 1.5);
+              engineRef.current.addObstacle(cx - (chord / 2) + i, cy + yOffset, 1.5);
+            }
+          } else if (shapeType === 'teardrop') {
+            // Teardrop: hemisphere head + sinusoidal tail
+            // Head
+            const r = 12;
+            for (let i = 0; i < 360; i++) {
+              const rad = i * Math.PI / 180;
+              // Draw circle part
+              engineRef.current.addObstacle(cx + Math.cos(rad) * r, cy + Math.sin(rad) * r, 1);
+            }
+            // Tail
+            for (let i = 0; i < 60; i++) {
+              const width = r * (1 - (i / 60));
+              engineRef.current.addObstacle(cx + r + i, cy + width / 2, 1);
+              engineRef.current.addObstacle(cx + r + i, cy - width / 2, 1);
+            }
+          } else if (shapeType === 'wing') {
+            // Swept delta wing logic
+            for (let i = 0; i < 60; i++) {
+              engineRef.current.addObstacle(cx + i, cy + (i * 0.4), 1.5);
+              engineRef.current.addObstacle(cx + i, cy - (i * 0.4), 1.5);
+              // Fill
+              if (i % 2 === 0) {
+                for (let j = 0; j < (i * 0.4); j++) {
+                  engineRef.current.addObstacle(cx + i, cy + j, 1.5);
+                  engineRef.current.addObstacle(cx + i, cy - j, 1.5);
+                }
               }
-           } else {
-             engineRef.current.addObstacle(data.x || 150, data.y || 100, data.radius || 15);
-           }
+            }
+          } else {
+            // Default: Ball / Circle
+            engineRef.current.addObstacle(cx, cy, radius);
+          }
         } else if (type === 'reset_sim' && engineRef.current) {
           engineRef.current.reset(flowSpeed);
         } else if (type === 'change_velocity') {
@@ -196,25 +238,25 @@ const App: React.FC = () => {
         {/* Left Telemetry Column */}
         <div className="col-span-2 flex flex-col gap-4">
           <div className="border border-[#333] bg-[#0a0a0a] p-3">
-             <div className="text-[#666] text-[8px] uppercase tracking-widest border-b border-[#333] mb-2">Atmospherics</div>
-             <div className="text-[10px] space-y-1">
-                <div className="flex justify-between"><span>FLOW_MACH</span><span className="text-[#ffae00]">0.84</span></div>
-                <div className="flex justify-between"><span>RE_NUMBER</span><span className="text-[#ffae00]">4.2E5</span></div>
-                <div className="flex justify-between"><span>STABILITY</span><span className="text-green-500">NOMINAL</span></div>
-             </div>
+            <div className="text-[#666] text-[8px] uppercase tracking-widest border-b border-[#333] mb-2">Atmospherics</div>
+            <div className="text-[10px] space-y-1">
+              <div className="flex justify-between"><span>FLOW_MACH</span><span className="text-[#ffae00]">0.84</span></div>
+              <div className="flex justify-between"><span>RE_NUMBER</span><span className="text-[#ffae00]">4.2E5</span></div>
+              <div className="flex justify-between"><span>STABILITY</span><span className="text-green-500">NOMINAL</span></div>
+            </div>
           </div>
           <div className="flex-1 border border-[#333] bg-[#0a0a0a] p-3 flex flex-col overflow-hidden">
-             <div className="text-[#666] text-[8px] uppercase tracking-widest border-b border-[#333] mb-2">Vector_Feed</div>
-             <div className="flex-1 relative overflow-hidden opacity-30">
-                {[...Array(15)].map((_, i) => (
-                   <div key={i} className="flex gap-1 mb-1 items-center">
-                      <div className="w-4 text-[7px] font-mono">{(Math.random()*90).toFixed(0)}</div>
-                      <div className="h-1 bg-white/20 flex-1">
-                         <div className="h-full bg-white/50" style={{width: `${Math.random()*100}%`}}></div>
-                      </div>
-                   </div>
-                ))}
-             </div>
+            <div className="text-[#666] text-[8px] uppercase tracking-widest border-b border-[#333] mb-2">Vector_Feed</div>
+            <div className="flex-1 relative overflow-hidden opacity-30">
+              {[...Array(15)].map((_, i) => (
+                <div key={i} className="flex gap-1 mb-1 items-center">
+                  <div className="w-4 text-[7px] font-mono">{(Math.random() * 90).toFixed(0)}</div>
+                  <div className="h-1 bg-white/20 flex-1">
+                    <div className="h-full bg-white/50" style={{ width: `${Math.random() * 100}%` }}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -231,8 +273,8 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex-1 flex items-center justify-center bg-[#050505] p-2">
-            <canvas 
-              ref={canvasRef} width={nx} height={ny} 
+            <canvas
+              ref={canvasRef} width={nx} height={ny}
               className="w-full h-full border border-[#222] contrast-[1.5] brightness-110 object-contain cursor-crosshair"
               onMouseDown={(e) => {
                 const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
@@ -260,16 +302,16 @@ const App: React.FC = () => {
               <span className="animate-pulse">●</span>
             </div>
             <div className="flex-1 p-3 text-[10px] overflow-y-auto space-y-2 font-mono scrollbar-hide">
-               {logs.map(log => (
-                 <div key={log.id} className="flex flex-col border-b border-[#222] pb-1">
-                   <div className="flex justify-between text-[8px] text-[#444]"><span>{log.source}</span><span>{log.timestamp}</span></div>
-                   <div className={`${log.source === 'AI' ? 'text-white' : 'text-[#666]'}`}>{log.content}</div>
-                 </div>
-               ))}
-               {isProcessing && <div className="text-[#ffae00] animate-pulse">DECODING_SATELLITE_LINK...</div>}
+              {logs.map(log => (
+                <div key={log.id} className="flex flex-col border-b border-[#222] pb-1">
+                  <div className="flex justify-between text-[8px] text-[#444]"><span>{log.source}</span><span>{log.timestamp}</span></div>
+                  <div className={`${log.source === 'AI' ? 'text-white' : 'text-[#666]'}`}>{log.content}</div>
+                </div>
+              ))}
+              {isProcessing && <div className="text-[#ffae00] animate-pulse">DECODING_SATELLITE_LINK...</div>}
             </div>
             <form onSubmit={handleCommand} className="p-2 border-t border-[#333] bg-black">
-              <input 
+              <input
                 type="text" value={input} onChange={e => setInput(e.target.value)} disabled={isProcessing}
                 className="w-full bg-[#111] border border-[#333] p-2 text-[10px] outline-none focus:border-[#ffae00] text-white"
                 placeholder="ENTER COMMAND_UPLINK..."
@@ -284,13 +326,13 @@ const App: React.FC = () => {
             </div>
             <div className="p-3 text-[10px] space-y-3 overflow-y-auto custom-scrollbar">
               <div className="flex gap-1">
-                 <select className="flex-1 bg-black border border-[#333] p-1 text-[9px] outline-none" value={resolution} onChange={e => setResolution(e.target.value)}>
-                    <option>400 x 200</option>
-                    <option>200 x 100</option>
-                 </select>
-                 <button onClick={() => engineRef.current?.reset(flowSpeed)} className="border border-[#333] px-1 hover:bg-[#222]">Reset fluid</button>
-                 <button onClick={() => { engineRef.current?.step(); draw(); }} className="border border-[#333] px-1 hover:bg-[#222]">Step</button>
-                 <button onClick={() => setIsPaused(!isPaused)} className="border border-[#333] px-1 hover:bg-[#222]">{isPaused ? 'Start' : 'Stop'}</button>
+                <select className="flex-1 bg-black border border-[#333] p-1 text-[9px] outline-none" value={resolution} onChange={e => setResolution(e.target.value)}>
+                  <option>400 x 200</option>
+                  <option>200 x 100</option>
+                </select>
+                <button onClick={() => engineRef.current?.reset(flowSpeed)} className="border border-[#333] px-1 hover:bg-[#222]">Reset fluid</button>
+                <button onClick={() => { engineRef.current?.step(); draw(); }} className="border border-[#333] px-1 hover:bg-[#222]">Step</button>
+                <button onClick={() => setIsPaused(!isPaused)} className="border border-[#333] px-1 hover:bg-[#222]">{isPaused ? 'Start' : 'Stop'}</button>
               </div>
 
               <div className="space-y-2">
@@ -298,7 +340,7 @@ const App: React.FC = () => {
                 <input type="range" min="0" max="0.2" step="0.005" value={flowSpeed} onChange={e => {
                   const v = parseFloat(e.target.value); setFlowSpeed(v); engineRef.current?.setInflow(v);
                 }} className="w-full h-1 bg-[#333] appearance-none accent-[#ffae00]" />
-                
+
                 <div className="flex justify-between items-baseline"><span>Viscosity = {viscosity.toFixed(3)}</span></div>
                 <input type="range" min="0.005" max="0.1" step="0.005" value={viscosity} onChange={e => {
                   const v = parseFloat(e.target.value); setViscosity(v); engineRef.current?.setViscosity(v);
@@ -306,38 +348,38 @@ const App: React.FC = () => {
               </div>
 
               <div className="flex gap-1">
-                 <select className="flex-1 bg-black border border-[#333] p-1 text-[9px] outline-none" value={barrierMode} onChange={e => setBarrierMode(e.target.value)}>
-                    <option>Draw barriers</option>
-                    <option>Erase barriers</option>
-                 </select>
-                 <select className="flex-1 bg-black border border-[#333] p-1 text-[9px] outline-none"><option>Barrier shapes</option></select>
-                 <button onClick={() => engineRef.current?.clearObstacles()} className="border border-[#333] px-1 hover:bg-[#222]">Clear</button>
+                <select className="flex-1 bg-black border border-[#333] p-1 text-[9px] outline-none" value={barrierMode} onChange={e => setBarrierMode(e.target.value)}>
+                  <option>Draw barriers</option>
+                  <option>Erase barriers</option>
+                </select>
+                <select className="flex-1 bg-black border border-[#333] p-1 text-[9px] outline-none"><option>Barrier shapes</option></select>
+                <button onClick={() => engineRef.current?.clearObstacles()} className="border border-[#333] px-1 hover:bg-[#222]">Clear</button>
               </div>
 
               <div className="flex gap-1 items-center">
-                 <select className="flex-1 bg-black border border-[#333] p-1 text-[9px] outline-none" value={plotMode} onChange={e => setPlotMode(e.target.value)}>
-                    <option value="curl">Plot curl</option>
-                    <option value="speed">Plot speed</option>
-                 </select>
-                 <span>Contrast:</span>
-                 <input type="range" min="100" max="4000" step="100" value={contrast} onChange={e => setContrast(parseInt(e.target.value))} className="w-16 h-1 bg-[#333] appearance-none accent-[#ffae00]" />
+                <select className="flex-1 bg-black border border-[#333] p-1 text-[9px] outline-none" value={plotMode} onChange={e => setPlotMode(e.target.value)}>
+                  <option value="curl">Plot curl</option>
+                  <option value="speed">Plot speed</option>
+                </select>
+                <span>Contrast:</span>
+                <input type="range" min="100" max="4000" step="100" value={contrast} onChange={e => setContrast(parseInt(e.target.value))} className="w-16 h-1 bg-[#333] appearance-none accent-[#ffae00]" />
               </div>
 
               <div className="flex gap-2 items-center text-[9px]">
-                 <span>Anim speed:</span>
-                 <input type="range" min="1" max="10" step="1" value={animationSpeed} onChange={e => setAnimationSpeed(parseInt(e.target.value))} className="w-16 h-1 bg-[#333] appearance-none accent-[#ffae00]" />
-                 <label className="flex items-center gap-1 cursor-pointer">
-                    <input type="checkbox" checked={isFaster} onChange={e => setIsFaster(e.target.checked)} className="accent-[#ffae00]" />
-                    Faster?
-                 </label>
+                <span>Anim speed:</span>
+                <input type="range" min="1" max="10" step="1" value={animationSpeed} onChange={e => setAnimationSpeed(parseInt(e.target.value))} className="w-16 h-1 bg-[#333] appearance-none accent-[#ffae00]" />
+                <label className="flex items-center gap-1 cursor-pointer">
+                  <input type="checkbox" checked={isFaster} onChange={e => setIsFaster(e.target.checked)} className="accent-[#ffae00]" />
+                  Faster?
+                </label>
               </div>
 
               <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[8px] uppercase font-bold text-[#666]">
-                 <label className="flex items-center gap-1"><input type="checkbox" checked={showTracers} onChange={e => setShowTracers(e.target.checked)} className="accent-[#ffae00]" /> Tracers</label>
-                 <label className="flex items-center gap-1"><input type="checkbox" checked={showFlowlines} onChange={e => setShowFlowlines(e.target.checked)} className="accent-[#ffae00]" /> Flowlines</label>
-                 <label className="flex items-center gap-1 opacity-50"><input type="checkbox" disabled /> Force on barriers</label>
-                 <label className="flex items-center gap-1 opacity-50"><input type="checkbox" disabled /> Sensor</label>
-                 <label className="flex items-center gap-1 opacity-50"><input type="checkbox" disabled /> Data</label>
+                <label className="flex items-center gap-1"><input type="checkbox" checked={showTracers} onChange={e => setShowTracers(e.target.checked)} className="accent-[#ffae00]" /> Tracers</label>
+                <label className="flex items-center gap-1"><input type="checkbox" checked={showFlowlines} onChange={e => setShowFlowlines(e.target.checked)} className="accent-[#ffae00]" /> Flowlines</label>
+                <label className="flex items-center gap-1 opacity-50"><input type="checkbox" disabled /> Force on barriers</label>
+                <label className="flex items-center gap-1 opacity-50"><input type="checkbox" disabled /> Sensor</label>
+                <label className="flex items-center gap-1 opacity-50"><input type="checkbox" disabled /> Data</label>
               </div>
             </div>
           </div>

@@ -7,7 +7,11 @@ Interpret tactical commands and translate them into simulation actions.
 Lattice dimensions: 400x200.
 
 Available actions:
-- generate_shape: Create tactical geometry. For 'wing' or 'B-2', use specialized coordinates.
+- generate_shape: Create geometry. 
+  - shape_type 'ball': for spheres, circles, or generic obstacles.
+  - shape_type 'naca': for airfoils, hydrofoils, or wings sections.
+  - shape_type 'wing': for swept wings, jets, or delta shapes.
+  - shape_type 'teardrop': for streamlined drops or low-drag shapes.
 - reset_sim: Clear lattice.
 - change_velocity: Adjust flow speed (0.0 to 0.2).
 - set_viscosity: Adjust fluid viscosity (0.005 to 0.2).
@@ -31,8 +35,19 @@ export const getTacticalChat = () => {
             type: Type.OBJECT,
             properties: {
               type: { type: Type.STRING, enum: ['generate_shape', 'reset_sim', 'change_velocity', 'set_viscosity'] },
-              data: { type: Type.OBJECT }
-            }
+              data: {
+                type: Type.OBJECT,
+                properties: {
+                  shape_type: { type: Type.STRING, enum: ['ball', 'naca', 'wing', 'teardrop'] },
+                  x: { type: Type.NUMBER },
+                  y: { type: Type.NUMBER },
+                  radius: { type: Type.NUMBER },
+                  velocity: { type: Type.NUMBER },
+                  viscosity: { type: Type.NUMBER }
+                }
+              }
+            },
+            required: ["type", "data"]
           }
         },
         required: ["tactical_message", "action"]
